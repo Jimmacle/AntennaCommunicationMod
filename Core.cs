@@ -3,7 +3,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
-using SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -131,7 +131,7 @@ namespace Jimmacle.Antennas
                                 }
                                 properties.Enqueue(message);
                             });
-                            Broadcast((IMyTerminalBlock)target, message);
+                            Broadcast(target, message);
                         }
                     }
                 }
