@@ -1,22 +1,18 @@
 ﻿using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
-using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace Jimmacle.Antennas
 {
     public static class CustomControls
     {
-        public static IMyTerminalAction SendAction<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalAction SendAction<T>() where T : IMyTerminalBlock
         {
             var sendAction = MyAPIGateway.TerminalControls.CreateAction<T>("Send");
             sendAction.Name = new StringBuilder("Send Message");
@@ -25,7 +21,7 @@ namespace Jimmacle.Antennas
             return sendAction;
         }
 
-        public static IMyTerminalAction ClearQueue<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalAction ClearQueue<T>() where T : IMyTerminalBlock
         {
             var clearQueue = MyAPIGateway.TerminalControls.CreateAction<T>("ClearIncoming");
             clearQueue.Name = new StringBuilder("Clear Incoming Messages");
@@ -34,7 +30,7 @@ namespace Jimmacle.Antennas
             return clearQueue;
         }
 
-        public static IMyTerminalControlProperty<int> ChannelProp<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControlProperty<int> ChannelProp<T>() where T : IMyTerminalBlock
         {
             var channelProp = MyAPIGateway.TerminalControls.CreateProperty<int, T>("Channel");
             channelProp.Getter = b => Config.GetProperties(b.EntityId).Channel;
@@ -49,7 +45,7 @@ namespace Jimmacle.Antennas
             return channelProp;
         }
 
-        public static IMyTerminalControlProperty<string> MessageProp<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControlProperty<string> MessageProp<T>() where T : IMyTerminalBlock
         {
             var messageProp = MyAPIGateway.TerminalControls.CreateProperty<string, T>("Message");
             messageProp.Getter = b => Config.GetProperties(b.EntityId).Message;
@@ -69,7 +65,7 @@ namespace Jimmacle.Antennas
             return messageProp;
         }
 
-        public static IMyTerminalControlProperty<int> IncomingCount<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControlProperty<int> IncomingCount<T>() where T : IMyTerminalBlock
         {
             var incomingCount = MyAPIGateway.TerminalControls.CreateProperty<int, T>("IncomingCount");
             incomingCount.Getter = b => Config.GetProperties(b.EntityId).QueueCount();
@@ -77,7 +73,7 @@ namespace Jimmacle.Antennas
             return incomingCount;
         }
 
-        public static IMyTerminalControlProperty<string> ReadNextIncoming<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControlProperty<string> ReadNextIncoming<T>() where T : IMyTerminalBlock
         {
             var readNextIncoming = MyAPIGateway.TerminalControls.CreateProperty<string, T>("ReadNextIncoming");
             readNextIncoming.Getter = b => Config.GetProperties(b.EntityId).Dequeue();
@@ -85,18 +81,18 @@ namespace Jimmacle.Antennas
             return readNextIncoming;
         }
 
-        public static IMyTerminalControlProperty<Ingame.IMyTerminalBlock> Callback<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControlProperty<IMyTerminalBlock> Callback<T>() where T : IMyTerminalBlock
         {
-            var callback = MyAPIGateway.TerminalControls.CreateProperty<Ingame.IMyTerminalBlock, T>("Callback");
+            var callback = MyAPIGateway.TerminalControls.CreateProperty<IMyTerminalBlock, T>("Callback");
             callback.Getter = b =>
             {
                 var properties = Config.GetProperties(b.EntityId);
                 IMyEntity entity;
                 if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
                 {
-                    if (entity is Ingame.IMyProgrammableBlock || entity is IMyTimerBlock)
+                    if (entity is IMyProgrammableBlock || entity is IMyTimerBlock)
                     {
-                        var target = entity as Ingame.IMyTerminalBlock;
+                        var target = entity as IMyTerminalBlock;
                         if (Core.HasGridConnection(b, target))
                         {
                             return target;
@@ -124,7 +120,7 @@ namespace Jimmacle.Antennas
                 }
                 else if (Core.HasGridConnection(b, v))
                 {
-                    if (v is Ingame.IMyProgrammableBlock || v is IMyTimerBlock)
+                    if (v is IMyProgrammableBlock || v is IMyTimerBlock)
                     {
                         properties.CallbackId = v.EntityId;
                     }
@@ -138,13 +134,13 @@ namespace Jimmacle.Antennas
             return callback;
         }
 
-        public static IMyTerminalControl Separator<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl Separator<T>() where T : IMyTerminalBlock
         {
             var separator = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, T>(string.Empty);
             return separator;
         }
 
-        public static IMyTerminalControl ChannelSlider<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl ChannelSlider<T>() where T : IMyTerminalBlock
         {
             var channelSlider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(string.Empty);
             channelSlider.Title = MyStringId.GetOrCompute("Channel");
@@ -161,7 +157,7 @@ namespace Jimmacle.Antennas
             return channelSlider;
         }
 
-        public static IMyTerminalControl MessageTextbox<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl MessageTextbox<T>() where T : IMyTerminalBlock
         {
             var messageTexbox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, T>(string.Empty);
             messageTexbox.Title = MyStringId.GetOrCompute("Message");
@@ -183,7 +179,7 @@ namespace Jimmacle.Antennas
             return messageTexbox;
         }
 
-        public static IMyTerminalControl SendBtn<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl SendBtn<T>() where T : IMyTerminalBlock
         {
             var sendBtn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, T>(string.Empty);
             sendBtn.Title = MyStringId.GetOrCompute("Send Message");
@@ -192,7 +188,7 @@ namespace Jimmacle.Antennas
             return sendBtn;
         }
 
-        public static IMyTerminalControl CallbackList<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl CallbackList<T>() where T : IMyTerminalBlock
         {
             var callbackList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, T>(string.Empty);
             callbackList.Title = MyStringId.GetOrCompute("Callback");
@@ -204,10 +200,10 @@ namespace Jimmacle.Antennas
                 if (b.CubeGrid != null)
                 {
                     var properties = Config.GetProperties(b.EntityId);
-                    var blocks = new List<Ingame.IMyTerminalBlock>();
-                    var timers = new List<Ingame.IMyTerminalBlock>();
+                    var blocks = new List<IMyTerminalBlock>();
+                    var timers = new List<IMyTerminalBlock>();
                     var gts = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid((IMyCubeGrid)b.CubeGrid);
-                    gts.GetBlocksOfType<Ingame.IMyProgrammableBlock>(blocks);
+                    gts.GetBlocksOfType<IMyProgrammableBlock>(blocks);
                     gts.GetBlocksOfType<IMyTimerBlock>(timers);
 
                     blocks.AddRange(timers);
@@ -235,7 +231,7 @@ namespace Jimmacle.Antennas
                 if (v.Count > 0 && v[0].UserData != null)
                 {
                     var properties = Config.GetProperties(b.EntityId);
-                    var pb = (Ingame.IMyTerminalBlock)v[0].UserData;
+                    var pb = (IMyTerminalBlock)v[0].UserData;
                     if (pb.HasPlayerAccess(b.OwnerId))
                     {
                         properties.CallbackId = pb.EntityId;
@@ -246,7 +242,7 @@ namespace Jimmacle.Antennas
             return callbackList;
         }
 
-        public static IMyTerminalControl ClearCallbackBtn<T>() where T : Ingame.IMyTerminalBlock
+        public static IMyTerminalControl ClearCallbackBtn<T>() where T : IMyTerminalBlock
         {
             var clearCallbackList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, T>(string.Empty);
             clearCallbackList.Title = MyStringId.GetOrCompute("Clear Selection");

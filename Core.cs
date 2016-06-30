@@ -1,8 +1,9 @@
 ﻿using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Cube;
-using Sandbox.Game.GameSystems;
+using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -10,10 +11,6 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
-using Sandbox.ModAPI.Interfaces;
-using SpaceEngineers.Game.ModAPI.Ingame;
-using Sandbox.Game.Gui;
 
 namespace Jimmacle.Antennas
 {
@@ -123,11 +120,11 @@ namespace Jimmacle.Antennas
                                 IMyEntity entity;
                                 if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
                                 {
-                                    var block = entity as Ingame.IMyTerminalBlock;
+                                    var block = entity as IMyTerminalBlock;
                                     if (HasGridConnection(target, block))
                                     {
-                                        if (block is Ingame.IMyProgrammableBlock)
-                                            if (((Ingame.IMyProgrammableBlock)block).TryRun(message)) return;
+                                        if (block is IMyProgrammableBlock)
+                                            if (((IMyProgrammableBlock)block).TryRun(message)) return;
                                         if (block is IMyTimerBlock)
                                             block.ApplyAction("TriggerNow");
                                     }
@@ -141,7 +138,7 @@ namespace Jimmacle.Antennas
             });
         }
 
-        public static void Broadcast(IMyTerminalBlock sender, string message, List<Ingame.IMyTerminalBlock> exclude = null)
+        public static void Broadcast(IMyTerminalBlock sender, string message, List<IMyTerminalBlock> exclude = null)
         {
             if (!sender.IsFunctional || string.IsNullOrWhiteSpace(message) || message.Length > MAX_LENGTH)
             {
@@ -159,11 +156,11 @@ namespace Jimmacle.Antennas
                     IMyEntity entity;
                     if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
                     {
-                        var block = entity as Ingame.IMyTerminalBlock;
+                        var block = entity as IMyTerminalBlock;
                         if (HasGridConnection(MyAPIGateway.Entities.GetEntityById(target.Value) as IMyTerminalBlock, block))
                         {
-                            if (block is Ingame.IMyProgrammableBlock)
-                                if (((Ingame.IMyProgrammableBlock)block).TryRun(message)) return;
+                            if (block is IMyProgrammableBlock)
+                                if (((IMyProgrammableBlock)block).TryRun(message)) return;
                             if (block is IMyTimerBlock)
                                 block.ApplyAction("TriggerNow");
                         }
@@ -175,7 +172,7 @@ namespace Jimmacle.Antennas
             {
                 if (exclude == null)
                 {
-                    exclude = new List<Ingame.IMyTerminalBlock>();
+                    exclude = new List<IMyTerminalBlock>();
                 }
 
                 exclude.Add(sender);
@@ -201,12 +198,12 @@ namespace Jimmacle.Antennas
                                         if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
                                         {
                                             var success = false;
-                                            var block = entity as Ingame.IMyTerminalBlock;
+                                            var block = entity as IMyTerminalBlock;
                                             if (HasGridConnection(target, block))
                                             {
-                                                if (block is Ingame.IMyProgrammableBlock)
+                                                if (block is IMyProgrammableBlock)
                                                 {
-                                                    var b = block as Ingame.IMyProgrammableBlock;
+                                                    var b = block as IMyProgrammableBlock;
                                                     success = b.TryRun(message);
                                                 }
                                                 else if (block is IMyTimerBlock)
@@ -231,21 +228,21 @@ namespace Jimmacle.Antennas
             }
         }
 
-        public static bool HasGridConnection(Ingame.IMyTerminalBlock source, Ingame.IMyTerminalBlock target)
+        public static bool HasGridConnection(IMyTerminalBlock source, IMyTerminalBlock target)
         {
             if (source == null || target == null) return false;
 
-            var blocks = new List<Ingame.IMyTerminalBlock>();
-            MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid((IMyCubeGrid)source.CubeGrid).GetBlocks(blocks);
+            var blocks = new List<IMyTerminalBlock>();
+            MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(source.CubeGrid).GetBlocks(blocks);
             return blocks.Contains(target);
         }
 
-        private static bool CanTransmit(long sourceIdentity, Ingame.IMyRadioAntenna target)
+        private static bool CanTransmit(long sourceIdentity, IMyRadioAntenna target)
         {
             return target.HasPlayerAccess(sourceIdentity);
         }
 
-        public static List<Ingame.IMyRadioAntenna> GetAntennasInRange(Vector3D position, double radius)
+        public static List<IMyRadioAntenna> GetAntennasInRange(Vector3D position, double radius)
         {
             if (!gotEntitiesThisTick)
             {
@@ -254,7 +251,7 @@ namespace Jimmacle.Antennas
                 gotEntitiesThisTick = true;
             }
 
-            var result = new List<Ingame.IMyRadioAntenna>();
+            var result = new List<IMyRadioAntenna>();
 
             foreach (var entity in entities)
             {
@@ -269,7 +266,7 @@ namespace Jimmacle.Antennas
                         //Find antennae in range and transmittable.
                         foreach (var block in (entity as MyCubeGrid).GetFatBlocks())
                         {
-                            var b = block as Ingame.IMyRadioAntenna;
+                            var b = block as IMyRadioAntenna;
                             if (b != null && b.IsFunctional)
                             {
                                 var distSquared = (b.GetPosition() - position).LengthSquared();

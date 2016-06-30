@@ -1,14 +1,10 @@
 ﻿using Sandbox.Common.ObjectBuilders;
-using Sandbox.ModAPI.Ingame;
+using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Collections.Generic;
-using System.Text;
 using VRage.Game.Components;
-using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
-using VRage.Utils;
-using Sandbox.ModAPI;
 
 namespace Jimmacle.Antennas
 {
