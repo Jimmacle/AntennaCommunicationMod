@@ -9,20 +9,28 @@ using VRage.ObjectBuilders;
 namespace Jimmacle.Antennas
 {
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_LaserAntenna))]
-    public class LaserTerminal : MyGameLogicComponent
+    public class LaserCommComponent : MyGameLogicComponent
     {
-        private static bool init = false;
-        private MyObjectBuilder_EntityBase builder;
+        public static HashSet<IMyLaserAntenna> LaserAntennae = new HashSet<IMyLaserAntenna>();
+
+        private static bool _init;
+        private MyObjectBuilder_EntityBase _builder;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            builder = objectBuilder;
+            _builder = objectBuilder;
             Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            LaserAntennae.Add(Entity as IMyLaserAntenna);
+        }
+
+        public override void MarkForClose()
+        {
+            LaserAntennae.Remove(Entity as IMyLaserAntenna);
         }
 
         public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
         {
-            return copy ? builder.Clone() as MyObjectBuilder_EntityBase : builder;
+            return copy ? _builder.Clone() as MyObjectBuilder_EntityBase : _builder;
         }
 
         public List<IMyTerminalControl> Controls = new List<IMyTerminalControl>();
@@ -35,9 +43,9 @@ namespace Jimmacle.Antennas
                 return;
             }
 
-            if (!init)
+            if (!_init)
             {
-                init = true;
+                _init = true;
 
                 //Actions.
                 var sendAction = CustomControls.SendAction<IMyLaserAntenna>();
@@ -80,9 +88,7 @@ namespace Jimmacle.Antennas
                 Controls.Add(clearCallbackBtn);
 
                 foreach (var control in Controls)
-                {
                     MyAPIGateway.TerminalControls.AddControl<IMyLaserAntenna>(control);
-                }
             }
         }
     }

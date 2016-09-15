@@ -6,7 +6,9 @@ using Sandbox.ModAPI.Interfaces;
 using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -14,47 +16,46 @@ using VRageMath;
 
 namespace Jimmacle.Antennas
 {
-    [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
+    [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class Core : MySessionComponentBase
     {
-        private bool init = false;
-        private static bool gotEntitiesThisTick = false;
-        private static HashSet<IMyEntity> entities = new HashSet<IMyEntity>();
+        private bool _init;
         private const int MAX_LENGTH = 1000;
 
-        public override void UpdateBeforeSimulation()
+        public override void UpdateAfterSimulation()
         {
             if (MyAPIGateway.Session != null)
-            {
-                if (!init)
+                if (!_init)
                 {
-                    init = true;
+                    _init = true;
 
                     Config.Load();
 
                     MyAPIGateway.Multiplayer.RegisterMessageHandler(1628, Config.GetSynced);
                     MyAPIGateway.Multiplayer.RegisterMessageHandler(1629, HandleBroadcastRequest);
                     MyAPIGateway.Utilities.MessageEntered += PlayerBroadcast;
-                }
 
-                gotEntitiesThisTick = false;
-            }
+                    Debug.Write("init");
+                }
         }
 
         public static void RequestBroadcast(byte[] msg)
         {
+            Debug.Write("broadcastreq");
             MyAPIGateway.Multiplayer.SendMessageToServer(1629, msg);
         }
 
-        private static void HandleBroadcastRequest(byte[] antennaId)
+        private void HandleBroadcastRequest(byte[] antennaId)
         {
+            Debug.Write("handlereq");
             var id = BitConverter.ToInt64(antennaId, 0);
             var entity = MyAPIGateway.Entities.GetEntityById(id);
 
-            if (entity is IMyTerminalBlock)
+            var block = entity as IMyTerminalBlock;
+            if (block != null)
             {
                 var properties = Config.GetProperties(id);
-                MyAPIGateway.Parallel.Start(() => Broadcast((IMyTerminalBlock)entity, properties.Message));
+                StartBroadcast(block, properties.Message, int.MaxValue);
                 return;
             }
 
@@ -63,11 +64,11 @@ namespace Jimmacle.Antennas
                 var message = Encoding.Unicode.GetString(antennaId, 12, antennaId.Length - 12);
                 var channel = BitConverter.ToInt32(antennaId, 8);
                 var player = MyAPIGateway.Players.GetPlayerControllingEntity(entity);
-                PlayerTransmit(player, channel, message);
+                BroadcastFromPlayer(entity as IMyCharacter, player, channel, message);
             }
         }
 
-        private static void PlayerBroadcast(string messageText, ref bool sendToOthers)
+        private void PlayerBroadcast(string messageText, ref bool sendToOthers)
         {
             if (messageText.StartsWith("/b"))
             {
@@ -93,195 +94,126 @@ namespace Jimmacle.Antennas
             }
         }
 
-        public static void PlayerTransmit(IMyPlayer player, int channel, string message)
+        public void BroadcastFromPlayer(IMyCharacter character, IMyPlayer player, int channel, string message)
         {
-            if (string.IsNullOrWhiteSpace(message) || message.Length > MAX_LENGTH)
-                return;
+            var antennas = GetValidReceivers(character.GetPosition(), 200);
 
-            if (!(player.Controller.ControlledEntity.Entity is IMyCharacter))
-                return;
-
-            if (!((player.Controller.ControlledEntity as Sandbox.Game.Entities.IMyControllableEntity).EnabledBroadcasting))
-                return;
-
-            MyAPIGateway.Parallel.Start(() =>
+            var excludeList = new HashSet<IMyTerminalBlock>();
+            foreach (var ant in antennas)
             {
-                var antennas = GetAntennasInRange(player.Controller.ControlledEntity.Entity.GetPosition(), 200);
+                if ((Config.GetProperties(ant.EntityId).Channel != channel) || !ant.HasPlayerAccess(player.PlayerID))
+                    continue;
 
-                foreach (var target in antennas)
-                {
-                    if (CanTransmit(player.IdentityId, target))
-                    {
-                        var properties = Config.GetProperties(target.EntityId);
-                        if (properties.Channel == channel)
-                        {
-                            MyAPIGateway.Utilities.InvokeOnGameThread(() =>
-                            {
-                                IMyEntity entity;
-                                if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
-                                {
-                                    var block = entity as IMyTerminalBlock;
-                                    if (HasGridConnection(target, block))
-                                    {
-                                        if (block is IMyProgrammableBlock)
-                                            if (((IMyProgrammableBlock)block).TryRun(message)) return;
-                                        if (block is IMyTimerBlock)
-                                            block.ApplyAction("TriggerNow");
-                                    }
-                                }
-                                properties.Enqueue(message);
-                            });
-                            Broadcast(target, message);
-                        }
-                    }
-                }
-            });
+                BroadcastRecursive(ant, message, int.MaxValue, excludeList);
+            }
         }
 
-        public static void Broadcast(IMyTerminalBlock sender, string message, List<IMyTerminalBlock> exclude = null)
+        public void StartBroadcast(IMyTerminalBlock source, string message, int maxHops)
         {
-            if (!sender.IsFunctional || string.IsNullOrWhiteSpace(message) || message.Length > MAX_LENGTH)
+            Debug.Write("startbroadcast");
+            if (message.Length > MAX_LENGTH)
+                return;
+
+            var laser = source.GetObjectBuilderCubeBlock() as MyObjectBuilder_LaserAntenna;
+            if (laser?.targetEntityId != null)
             {
+                IMyEntity entity;
+                MyAPIGateway.Entities.TryGetEntityById(laser.targetEntityId, out entity);
+                var endpoint = entity as IMyLaserAntenna;
+
+                if (endpoint != null)
+                    ProcessMessage(endpoint, message);
+
                 return;
             }
 
-            var obj = (sender as IMyCubeBlock).GetObjectBuilderCubeBlock() as MyObjectBuilder_LaserAntenna;
+            var excludeList = new HashSet<IMyTerminalBlock>();
+            BroadcastRecursive(source, message, maxHops, excludeList, false);
+        }
 
-            if (obj != null)
+        public void BroadcastRecursive(IMyTerminalBlock source, string message, int remainingHops, HashSet<IMyTerminalBlock> exclude, bool processLocal = true)
+        {
+            Debug.Write("broadcastrecursive");
+            if (exclude.Contains(source))
+                return;
+
+            exclude.Add(source);
+
+            if (processLocal)
+                ProcessMessage(source, message);
+
+            if (remainingHops <= 0)
+                return;
+
+            remainingHops--;
+
+            var radius = source.GetProperty("Radius").AsFloat().GetValue(source);
+            var receivers = GetValidReceivers(source.Position, radius);
+            foreach (var rec in receivers)
             {
-                var target = obj.targetEntityId;
-                if (target != null)
+                if ((Config.GetProperties(source.EntityId).Channel != Config.GetProperties(rec.EntityId).Channel) || !rec.HasPlayerAccess(source.OwnerId))
                 {
-                    var properties = Config.GetProperties(target.Value);
-                    IMyEntity entity;
-                    if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
-                    {
-                        var block = entity as IMyTerminalBlock;
-                        if (HasGridConnection(MyAPIGateway.Entities.GetEntityById(target.Value) as IMyTerminalBlock, block))
-                        {
-                            if (block is IMyProgrammableBlock)
-                                if (((IMyProgrammableBlock)block).TryRun(message)) return;
-                            if (block is IMyTimerBlock)
-                                block.ApplyAction("TriggerNow");
-                        }
-                    }
-                    properties.Enqueue(message);
+                    exclude.Add(rec);
+                    continue;
                 }
+
+                BroadcastRecursive(rec, message, remainingHops, exclude);
             }
-            else
+        }
+
+        public void ProcessMessage(IMyTerminalBlock endpoint, string message)
+        {
+            Debug.Write("procmsg");
+            var properties = Config.GetProperties(endpoint.EntityId);
+            IMyEntity callback;
+            MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out callback);
+
+            if ((callback as IMyTerminalBlock)?.CubeGrid != endpoint.CubeGrid)
+                return;
+
+            var pb = callback as IMyProgrammableBlock;
+            if (pb != null)
             {
-                if (exclude == null)
-                {
-                    exclude = new List<IMyTerminalBlock>();
-                }
-
-                exclude.Add(sender);
-
-                var senderProperties = Config.GetProperties(sender.EntityId);
-                var antennas = GetAntennasInRange(sender.GetPosition(), TerminalPropertyExtensions.GetValue<float>(sender, "Radius"));
-
-                foreach (var target in antennas)
-                {
-                    if (!exclude.Contains(target))
-                    {
-                        if (target.IsFunctional && CanTransmit(sender.OwnerId, target))
-                        {
-                            exclude.Add(target);
-                            var properties = Config.GetProperties(target.EntityId);
-                            if (properties.AntennaId != senderProperties.AntennaId)
-                            {
-                                if (properties.Channel == senderProperties.Channel)
-                                {
-                                    MyAPIGateway.Utilities.InvokeOnGameThread(() =>
-                                    {
-                                        IMyEntity entity;
-                                        if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
-                                        {
-                                            var success = false;
-                                            var block = entity as IMyTerminalBlock;
-                                            if (HasGridConnection(target, block))
-                                            {
-                                                if (block is IMyProgrammableBlock)
-                                                {
-                                                    var b = block as IMyProgrammableBlock;
-                                                    success = b.TryRun(message);
-                                                }
-                                                else if (block is IMyTimerBlock)
-                                                {
-                                                    block.ApplyAction("TriggerNow");
-                                                    success = true;
-                                                }
-                                            }
-
-                                            if (!success)
-                                            {
-                                                properties.Enqueue(message);
-                                            }
-                                        }
-                                    });
-                                }
-                                Broadcast((IMyTerminalBlock)target, message, exclude);
-                            }
-                        }
-                    }
-                }
+                pb.TryRun(message);
+                return;
             }
+
+            var timer = callback as IMyTimerBlock;
+            if (timer != null)
+            {
+                timer.ApplyAction("TriggerNow");
+                return;
+            }
+
+            properties.Enqueue(message);
         }
 
         public static bool HasGridConnection(IMyTerminalBlock source, IMyTerminalBlock target)
         {
-            if (source == null || target == null) return false;
+            if ((source == null) || (target == null)) return false;
 
             var blocks = new List<IMyTerminalBlock>();
             MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(source.CubeGrid).GetBlocks(blocks);
             return blocks.Contains(target);
         }
 
-        private static bool CanTransmit(long sourceIdentity, IMyRadioAntenna target)
+        public static List<IMyTerminalBlock> GetValidReceivers(Vector3D position, double radius)
         {
-            return target.HasPlayerAccess(sourceIdentity);
-        }
+            var output = new List<IMyTerminalBlock>();
+            var max = radius * radius;
 
-        public static List<IMyRadioAntenna> GetAntennasInRange(Vector3D position, double radius)
-        {
-            if (!gotEntitiesThisTick)
+            foreach (var radio in RadioCommComponent.RadioAntennae)
             {
-                entities.Clear();
-                MyAPIGateway.Entities.GetEntities(entities);
-                gotEntitiesThisTick = true;
+                if (!radio.IsWorking)
+                    continue;
+
+                var dst = (radio.GetPosition() - position).LengthSquared();
+                if (dst <= max)
+                    output.Add(radio);
             }
+            Debug.Write($"getants: {output.Count}");
 
-            var result = new List<IMyRadioAntenna>();
-
-            foreach (var entity in entities)
-            {
-                if (entity is MyCubeGrid)
-                {
-                    double gridDistSquared = (entity.GetPosition() - position).LengthSquared();
-                    double gridRadius = entity.WorldAABB.Extents.Max();
-
-                    //Check if grid may have antennae in range.
-                    if (gridDistSquared < Math.Pow(radius + gridRadius, 2))
-                    {
-                        //Find antennae in range and transmittable.
-                        foreach (var block in (entity as MyCubeGrid).GetFatBlocks())
-                        {
-                            var b = block as IMyRadioAntenna;
-                            if (b != null && b.IsFunctional)
-                            {
-                                var distSquared = (b.GetPosition() - position).LengthSquared();
-
-                                if (distSquared < Math.Pow(radius, 2))
-                                {
-                                    result.Add(b);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return result;
+            return output;
         }
 
         public override void SaveData()

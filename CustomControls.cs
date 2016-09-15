@@ -52,14 +52,7 @@ namespace Jimmacle.Antennas
             messageProp.Setter = (b, v) =>
             {
                 var properties = Config.GetProperties(b.EntityId);
-                if (v.Length > 1000)
-                {
-                    properties.Message = v.Substring(0, 1000);
-                }
-                else
-                {
-                    properties.Message = v;
-                }
+                properties.Message = v.Length > 1000 ? v.Substring(0, 1000) : v;
                 Config.SendSynced(properties);
             };
             return messageProp;
@@ -91,44 +84,26 @@ namespace Jimmacle.Antennas
                 if (MyAPIGateway.Entities.TryGetEntityById(properties.CallbackId, out entity))
                 {
                     if (entity is IMyProgrammableBlock || entity is IMyTimerBlock)
-                    {
-                        var target = entity as IMyTerminalBlock;
-                        if (Core.HasGridConnection(b, target))
-                        {
-                            return target;
-                        }
-                    }
-                    else
-                    {
-                        throw new Exception("Callback is not set to a PB or timer.");
-                    }
-                }
-                else
-                {
-                    properties.CallbackId = 0;
-                    Config.SendSynced(properties);
+                        return (IMyTerminalBlock)entity;
+
+                    throw new Exception("Callback is not set to a PB or timer.");
                 }
 
+                properties.CallbackId = 0;
+                Config.SendSynced(properties);
                 return null;
             };
             callback.Setter = (b, v) =>
             {
                 var properties = Config.GetProperties(b.EntityId);
                 if (v == null)
-                {
                     properties.CallbackId = 0;
-                }
                 else if (Core.HasGridConnection(b, v))
-                {
                     if (v is IMyProgrammableBlock || v is IMyTimerBlock)
-                    {
                         properties.CallbackId = v.EntityId;
-                    }
                     else
-                    {
                         throw new Exception("Callback is not set to a PB or timer.");
-                    }
-                }
+
                 Config.SendSynced(properties);
             };
             return callback;
@@ -153,7 +128,7 @@ namespace Jimmacle.Antennas
                 properties.Channel = (int)v;
                 Config.SendSynced(properties);
             };
-            channelSlider.Writer = (b, v) => v = v.Append("CH " + Config.GetProperties(b.EntityId).Channel);
+            channelSlider.Writer = (b, v) => v.Append("CH " + Config.GetProperties(b.EntityId).Channel);
             return channelSlider;
         }
 
@@ -167,13 +142,9 @@ namespace Jimmacle.Antennas
             {
                 var properties = Config.GetProperties(b.EntityId);
                 if (v.Length > 1000)
-                {
                     properties.Message = v.ToString().Substring(0, 1000);
-                }
                 else
-                {
                     properties.Message = v.ToString();
-                }
                 Config.SendSynced(properties);
             };
             return messageTexbox;
@@ -202,14 +173,13 @@ namespace Jimmacle.Antennas
                     var properties = Config.GetProperties(b.EntityId);
                     var blocks = new List<IMyTerminalBlock>();
                     var timers = new List<IMyTerminalBlock>();
-                    var gts = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid((IMyCubeGrid)b.CubeGrid);
+                    var gts = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(b.CubeGrid);
                     gts.GetBlocksOfType<IMyProgrammableBlock>(blocks);
                     gts.GetBlocksOfType<IMyTimerBlock>(timers);
 
                     blocks.AddRange(timers);
 
                     foreach (var block in blocks)
-                    {
                         if (block.HasPlayerAccess(b.OwnerId))
                         {
                             var item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(block.CustomName), default(MyStringId), block);
@@ -223,12 +193,11 @@ namespace Jimmacle.Antennas
                                 v.Add(item);
                             }
                         }
-                    }
                 }
             };
             callbackList.ItemSelected = (b, v) =>
             {
-                if (v.Count > 0 && v[0].UserData != null)
+                if ((v.Count > 0) && (v[0].UserData != null))
                 {
                     var properties = Config.GetProperties(b.EntityId);
                     var pb = (IMyTerminalBlock)v[0].UserData;

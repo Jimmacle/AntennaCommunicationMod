@@ -31,16 +31,15 @@ namespace Jimmacle.Antennas
                 //Serialize dictionary to XML.
                 var storage = new List<byte[]>();
                 foreach (var item in antennaConfigs)
-                {
                     storage.Add(item.Value.Serialized());
-                }
+
                 var str = MyAPIGateway.Utilities.SerializeToXML(storage);
 
                 MyAPIGateway.Utilities.SetVariable(VAR_KEY, str);
             }
             catch
             {
-
+                Debug.Write("Save failed!");
             }
         }
 
@@ -72,25 +71,19 @@ namespace Jimmacle.Antennas
             var packets = MessageHelper.Segment(data);
 
             foreach (var packet in packets)
-            {
                 MyAPIGateway.Multiplayer.SendMessageToOthers(1628, packet);
-            }
         }
 
         public static void GetSynced(byte[] message)
         {
-            byte[] data = MessageHelper.Desegment(message);
+            var data = MessageHelper.Desegment(message);
             if (data != null)
             {
                 var properties = AntennaProperties.Deserialize(data);
                 if (antennaConfigs.ContainsKey(properties.AntennaId))
-                {
                     antennaConfigs[properties.AntennaId] = properties;
-                }
                 else
-                {
                     antennaConfigs.Add(properties.AntennaId, properties);
-                }
             }
         }
 
@@ -99,7 +92,7 @@ namespace Jimmacle.Antennas
             public long AntennaId;
             public long CallbackId;
             public int Channel;
-            public string Message = "";
+            public string Message;
 
             public AntennaProperties(long id) : this()
             {
@@ -115,22 +108,16 @@ namespace Jimmacle.Antennas
             public void Enqueue(string message)
             {
                 if (!antennaQueues.ContainsKey(AntennaId))
-                {
                     antennaQueues.Add(AntennaId, new Queue<string>());
-                }
 
                 if (antennaQueues[AntennaId].Count < 50)
-                {
                     antennaQueues[AntennaId].Enqueue(message);
-                }
             }
 
             public string Dequeue()
             {
-                if (antennaQueues.ContainsKey(AntennaId) && antennaQueues[AntennaId].Count > 0)
-                {
+                if (antennaQueues.ContainsKey(AntennaId) && (antennaQueues[AntennaId].Count > 0))
                     return antennaQueues[AntennaId].Dequeue();
-                }
 
                 return null;
             }
@@ -138,9 +125,7 @@ namespace Jimmacle.Antennas
             public int QueueCount()
             {
                 if (antennaQueues.ContainsKey(AntennaId))
-                {
                     return antennaQueues[AntennaId].Count;
-                }
 
                 return 0;
             }
@@ -148,9 +133,7 @@ namespace Jimmacle.Antennas
             public void ClearQueue()
             {
                 if (antennaQueues.ContainsKey(AntennaId))
-                {
                     antennaQueues[AntennaId].Clear();
-                }
             }
 
             private const int META_LENGTH = sizeof(long) * 2 + sizeof(int);
@@ -162,7 +145,7 @@ namespace Jimmacle.Antennas
                 var channel = BitConverter.GetBytes(Channel);
                 var msg = Encoding.Unicode.GetBytes(Message);
 
-                int outputSize = META_LENGTH + msg.Length;
+                var outputSize = META_LENGTH + msg.Length;
                 var output = new byte[outputSize];
 
                 Array.Copy(antenna, 0, output, 0, antenna.Length);
@@ -175,11 +158,13 @@ namespace Jimmacle.Antennas
 
             public static AntennaProperties Deserialize(byte[] obj)
             {
-                var props = new AntennaProperties();
-                props.AntennaId = BitConverter.ToInt64(obj, 0);
-                props.CallbackId = BitConverter.ToInt64(obj, 8);
-                props.Channel = BitConverter.ToInt32(obj, 16);
-                props.Message = Encoding.Unicode.GetString(obj, 20, obj.Length - META_LENGTH);
+                var props = new AntennaProperties
+                {
+                    AntennaId = BitConverter.ToInt64(obj, 0),
+                    CallbackId = BitConverter.ToInt64(obj, 8),
+                    Channel = BitConverter.ToInt32(obj, 16),
+                    Message = Encoding.Unicode.GetString(obj, 20, obj.Length - META_LENGTH)
+                };
                 return props;
             }
         }

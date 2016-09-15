@@ -5,7 +5,7 @@ namespace Jimmacle.Antennas
 {
     public static class MessageHelper
     {
-        private static Dictionary<int, PartialMessage> messages = new Dictionary<int, PartialMessage>();
+        private static readonly Dictionary<int, PartialMessage> Messages = new Dictionary<int, PartialMessage>();
         private const int PACKET_SIZE = 4096;
         private const int META_SIZE = sizeof(int) * 2;
         private const int DATA_LENGTH = PACKET_SIZE - META_SIZE;
@@ -19,9 +19,9 @@ namespace Jimmacle.Antennas
         {
             var hash = BitConverter.GetBytes(message.GetHashCode());
             var packets = new List<byte[]>();
-            int msgIndex = 0;
+            var msgIndex = 0;
 
-            int packetId = message.Length / DATA_LENGTH;
+            var packetId = message.Length / DATA_LENGTH;
 
             while (packetId >= 0)
             {
@@ -29,13 +29,9 @@ namespace Jimmacle.Antennas
                 byte[] segment;
 
                 if (message.Length - msgIndex > DATA_LENGTH)
-                {
                     segment = new byte[PACKET_SIZE];
-                }
                 else
-                {
                     segment = new byte[META_SIZE + message.Length - msgIndex];
-                }
 
                 //Copy packet header data.
                 Array.Copy(hash, segment, hash.Length);
@@ -56,65 +52,53 @@ namespace Jimmacle.Antennas
         /// Reassembles a segmented byte array.
         /// </summary>
         /// <param name="packet">Array segment.</param>
-        /// <param name="message">Full array, null if incomplete.</param>
         /// <returns>Message fully desegmented, "message" is assigned.</returns>
         public static byte[] Desegment(byte[] packet)
         {
-            int hash = BitConverter.ToInt32(packet, 0);
-            int packetId = BitConverter.ToInt32(packet, sizeof(int));
-            byte[] dataBytes = new byte[packet.Length - META_SIZE];
+            var hash = BitConverter.ToInt32(packet, 0);
+            var packetId = BitConverter.ToInt32(packet, sizeof(int));
+            var dataBytes = new byte[packet.Length - META_SIZE];
             Array.Copy(packet, META_SIZE, dataBytes, 0, packet.Length - META_SIZE);
 
-            if (!messages.ContainsKey(hash))
-            {
+            if (!Messages.ContainsKey(hash))
                 if (packetId == 0)
-                {
                     return dataBytes;
-                }
                 else
-                {
-                    messages.Add(hash, new PartialMessage(packetId));
-                }
-            }
+                    Messages.Add(hash, new PartialMessage(packetId));
 
-            var message = messages[hash];
+            var message = Messages[hash];
             message.WritePart(packetId, dataBytes);
 
-            if (message.IsComplete)
-            {
-                messages.Remove(hash);
-                return message.Data;
-            }
+            if (!message.IsComplete)
+                return null;
 
-            return null;
+            Messages.Remove(hash);
+            return message.Data;
         }
 
         private class PartialMessage
         {
             public byte[] Data;
-            private HashSet<int> receivedPackets = new HashSet<int>();
-            private readonly int MaxId;
-            public bool IsComplete { get { return receivedPackets.Count == MaxId + 1; } }
-
+            private readonly HashSet<int> _receivedPackets = new HashSet<int>();
+            private readonly int _maxId;
+            public bool IsComplete => _receivedPackets.Count == _maxId + 1;
 
             public PartialMessage(int startId)
             {
-                MaxId = startId;
+                _maxId = startId;
                 Data = new byte[DATA_LENGTH * startId];
             }
 
             public void WritePart(int id, byte[] data)
             {
-                int index = MaxId - id;
-                int requiredLength = (index * DATA_LENGTH) + data.Length;
+                var index = _maxId - id;
+                var requiredLength = index * DATA_LENGTH + data.Length;
 
                 if (Data.Length < requiredLength)
-                {
                     Array.Resize(ref Data, requiredLength);
-                }
 
                 Array.Copy(data, 0, Data, index * DATA_LENGTH, data.Length);
-                receivedPackets.Add(id);
+                _receivedPackets.Add(id);
             }
         }
     }
